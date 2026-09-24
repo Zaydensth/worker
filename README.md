@@ -10,7 +10,7 @@ three on one model makes at least one of them worse.
 | Tier | Model | Owns | Must not |
 |---|---|---|---|
 | **1 — Decide** | Claude Fable 5.1 | the plan, the design call, the diagnosis when the cause isn't obvious, the go / no-go | run the work — it cannot edit files or spawn agents |
-| **2 — Execute** | Claude Opus 5.5 | reading tier 1's plan *in detail* and carrying it out; adversarial verification before anything irreversible | re-decide. A plan that doesn't cover the case goes back to tier 1 |
+| **2 — Execute** | Claude Opus 5 | reading tier 1's plan *in detail* and carrying it out; adversarial verification before anything irreversible | re-decide. A plan that doesn't cover the case goes back to tier 1 |
 | **3 — Work** | Claude Sonnet 5 | everything the data already settles: monitoring, ops, data pulls, drafts, reports, **and every loop** | set direction. It executes the errand; it does not choose the errand |
 
 ## The fleet
@@ -18,9 +18,9 @@ three on one model makes at least one of them worse.
 | Agent | Tier | Model | Effort | Used for |
 |---|---|---|---|---|
 | `strategist` | 1 | `claude-fable-5-1` | `max` | the plan, the hard call, the go / no-go (plan-only) |
-| `executor` | 2 | `claude-opus-5-5` | `max` | implementation, multi-file critical-path work, VPS orchestration |
-| `verifier` | 2 | `claude-opus-5-5` | `max` | adversarially refute a claim before a merge / push / submit |
-| `arm-runner` | 2 | `claude-opus-5-5` | `max` | run one pre-registered A/B arm end to end on a GPU box |
+| `executor` | 2 | `claude-opus-5` | `max` | implementation, multi-file critical-path work, VPS orchestration |
+| `verifier` | 2 | `claude-opus-5` | `max` | adversarially refute a claim before a merge / push / submit |
+| `arm-runner` | 2 | `claude-opus-5` | `max` | run one pre-registered A/B arm end to end on a GPU box |
 | `worker-sonnet` | 3 | `claude-sonnet-5` | `max` | code from a spec, parallel reading, drafts, and all mechanical work |
 | `gate-auditor` | 3 | `claude-sonnet-5` | `max` | evaluate ship gates for a SHA, with evidence |
 | `tournament-intel` | 3 | `claude-sonnet-5` | `max` | pull the public record after a round, replay, draft a memory |
@@ -53,11 +53,29 @@ No line, no GPU. Break glass by recording `VERDICT=UNAVAILABLE` or `VERDICT=BYPA
 explicitly — so a missing tier 1 never idles a machine you're paying for, and never
 disappears silently either.
 
+## Pin the model you actually get
+
+`model:` in the frontmatter really does land — a full model ID is accepted, not ignored. But an
+ID the sub-agent resolver doesn't know **falls back silently to the session's model**: no error,
+no warning, no log line. Measured on one build: `claude-fable-5-1` and `claude-sonnet-5` landed
+exactly; `claude-opus-5-5` *and* the bare alias `opus` both came back as `claude-opus-5`, even
+though the model catalog listed 5.5 and the running build met its `min_claude_code_version`.
+
+So this repo pins the model that is actually served rather than the one we'd prefer. A file that
+names a model which never runs is the same failure class as an unreachable feature flag — it
+reads as configured and isn't. Check it from the transcript, never by asking the agent (models
+are unreliable narrators of their own identity, and cannot see their effort setting at all):
+
+```sh
+grep -ho '"model":"[^"]*"' ~/.claude/projects/<slug>/<session>/subagents/agent-*.jsonl | sort -u
+```
+
+Re-run that probe after a CLI upgrade and move the pin when the newer ID starts landing.
+
 ## Effort
 
-`low` · `medium` · `high` · `xhigh` · `max`. Absent means `high` — **except Claude Opus 5.5,
-whose default is `medium`**, which is why the `effort: max` line on the tier-2 agents is
-load-bearing rather than decorative.
+`low` · `medium` · `high` · `xhigh` · `max`. Absent means `high`, and all three models here
+accept all five, so `effort: max` is a genuine step up rather than a restatement of the default.
 
 Anything else — including a session-mode name such as `ultracode` — is an **unknown
 frontmatter field and is silently ignored**: the agent falls back to its default with no

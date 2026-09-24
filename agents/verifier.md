@@ -10,7 +10,7 @@ description: >
   input to a plan. Do NOT use it to produce the change itself, to choose between
   options (that call belongs to the strategist), or for a claim nobody is about to
   act on — verification costs a top-tier model and earns it only at a decision point.
-model: claude-opus-5-5
+model: claude-opus-5
 effort: max
 disallowedTools: Write, Edit, Agent
 ---

@@ -28,9 +28,9 @@ proceeding, and never by idling a machine you are paying for.
 | Tier | Agent | Model | Reach for it when |
 |---|---|---|---|
 | decide | `strategist` | `claude-fable-5-1` | the four points above. Bring the numbers; take back a plan or a verdict, not an edit. |
-| execute | `executor` | `claude-opus-5-5` | reading the plan in detail and carrying it out: multi-file critical-path work, VPS orchestration, a fix the main loop failed twice. |
-| execute | `verifier` | `claude-opus-5-5` | before a merge, a push, a registration, or anything that spends a budget you don't get back. It tries to *refute* the claim and returns VERIFIED or REFUTED with evidence — never a rewrite. |
-| execute | `arm-runner` | `claude-opus-5-5` | one pre-registered A/B arm, end to end, with its verdict applied. |
+| execute | `executor` | `claude-opus-5` | reading the plan in detail and carrying it out: multi-file critical-path work, VPS orchestration, a fix the main loop failed twice. |
+| execute | `verifier` | `claude-opus-5` | before a merge, a push, a registration, or anything that spends a budget you don't get back. It tries to *refute* the claim and returns VERIFIED or REFUTED with evidence — never a rewrite. |
+| execute | `arm-runner` | `claude-opus-5` | one pre-registered A/B arm, end to end, with its verdict applied. |
 | work | `worker-sonnet` | `claude-sonnet-5` | code from a clear spec, moderate analysis, reading a subsystem, drafting scripts and docs — **and all mechanical work**: grep / glob, log tails, extracting fields and numbers, format and existence checks, status polling. |
 | work | `gate-auditor` | `claude-sonnet-5` | evaluate ship gates for a SHA and write the evidence line. |
 | work | `tournament-intel` | `claude-sonnet-5` | pull the public record after a round, replay, draft the memory note. |
@@ -49,14 +49,19 @@ delegate, and **verifying every worker's output before trusting it**.
 
 ## Effort
 
-Valid values: `low` · `medium` · `high` · `xhigh` · `max`. Absent means `high` — **except
-Claude Opus 5.5, whose default is `medium`**, so the `effort: max` line on the tier-2 agents
-does real work. An unrecognised value — including a session-mode name such as `ultracode` — is
+Valid values: `low` · `medium` · `high` · `xhigh` · `max`. Absent means `high`, and every model
+pinned here accepts all five, so `effort: max` is a real step up. An unrecognised value — including a session-mode name such as `ultracode` — is
 an unknown frontmatter field and is **silently ignored**, so the agent falls back to its
 default with no error. Every agent here is pinned to `max`; there is no exception.
 
 Verify a mass effort change by reading the frontmatter back, not by trusting that the `sed`
-exited 0.
+exited 0. **And verify `model:` from the transcript, not the file** — a model ID the sub-agent
+resolver doesn't recognise falls back silently to the session model, with no error and no log
+line, so the frontmatter can name a model that never runs:
+
+```sh
+grep -ho '"model":"[^"]*"' ~/.claude/projects/<slug>/<session>/subagents/agent-*.jsonl | sort -u
+```
 
 ## Rules that outrank convenience
 

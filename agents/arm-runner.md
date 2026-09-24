@@ -9,7 +9,7 @@ description: >
   (RUNBOOK §2, ARM 0-8) is named AND the caller gives the path of the locked plan
   that names it. Refuses arms outside that table, refuses to start without that
   locked plan file, and never touches VPS power or submits on-chain.
-model: claude-opus-5-5
+model: claude-opus-5
 effort: max
 disallowedTools: Agent
 ---
