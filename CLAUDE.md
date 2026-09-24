@@ -1,49 +1,76 @@
 # Model fleet — hand-off rules
 
-Eight tiered sub-agents live in `~/.claude/agents/`. Route every task to the cheapest
-model that can do it correctly; reserve the top tier for real strategy, and spend a
-top-tier model on *verification* before anything irreversible.
+Seven tiered sub-agents live in `~/.claude/agents/`. **One model decides, one executes what
+was decided, one does the volume.** Route down for anything with a written spec and a
+checkable output; escalate up for a decision that is expensive if wrong, a failure whose
+cause is not obvious, or an irreversible action.
 
-## Default pattern (C): a mid-tier model leads and reaches up through `Agent`
-Main loop = **Sonnet 5** (`/model sonnet`). It carries routine OODA, runbooks, monitoring,
-reporting and memory, and escalates only by spawning an agent.
-(Pattern B: main loop = Opus for sustained implementation. Pattern A: main loop = Fable
-for planning-heavy work. Both remain valid as a stated exception, not as the default.)
+## Tier 1 — Fable 5.1 decides, and it is mandatory
+
+| Point | When | Produces |
+|---|---|---|
+| **LOCK** | before a plan or pre-registration is frozen | `FABLE-PLAN:` line in the lock file |
+| **RE-SCOPE** | the data contradicts the plan | a new plan, not an improvised patch |
+| **GO / NO-GO** | before a merge, push, publish or submit | an explicit verdict |
+| **POST-MORTEM** | after the result lands | the synthesis |
+
+This replaces the older "at most once per task" ceiling: consulting tier 1 is a **gate**, not
+a budget line. The unit is a **plan, not a step** — one locked plan covers dozens of cells,
+and cells inside it need no further tier-1 call.
+
+**Anchor it to an artifact.** Each call appends one line to `FABLE_LEDGER.md` and writes
+`FABLE-PLAN:` into the lock file; the next step greps for it and refuses without it. Break
+glass by recording `VERDICT=UNAVAILABLE` or `VERDICT=BYPASS-USER` — never by silently
+proceeding, and never by idling a machine you are paying for.
+
+## The ladder
 
 | Tier | Agent | Model | Reach for it when |
 |---|---|---|---|
-| leader | `strategist` | Fable 5 | a genuinely hard design call, a failure whose cause is not obvious, or the final go / no-go before a push, publish or submit. **At most once per situation** — bring the numbers, take back a decision, execute it yourself. |
-| verify | `verifier` | Opus 5 | before a merge, a push, a registration, or anything that spends GPU hours. It tries to *refute* the claim and returns VERIFIED or REFUTED with evidence — never a rewrite. |
-| execute | `executor` | Opus 5 | multi-file work on a critical path, VPS orchestration, or a fix the leader failed twice. |
-| work | `worker-sonnet` | Sonnet 5 | code from a clear spec, moderate analysis, reading a subsystem, drafting scripts and docs. |
-| work | `worker-haiku` | Haiku 4.5 | grep / glob, log scraping, extracting fields or numbers, format and existence checks, status polling — high-volume mechanical "find and report". |
+| decide | `strategist` | `claude-fable-5-1` | the four points above. Bring the numbers; take back a plan or a verdict, not an edit. |
+| execute | `executor` | `claude-opus-5-5` | reading the plan in detail and carrying it out: multi-file critical-path work, VPS orchestration, a fix the main loop failed twice. |
+| execute | `verifier` | `claude-opus-5-5` | before a merge, a push, a registration, or anything that spends a budget you don't get back. It tries to *refute* the claim and returns VERIFIED or REFUTED with evidence — never a rewrite. |
+| execute | `arm-runner` | `claude-opus-5-5` | one pre-registered A/B arm, end to end, with its verdict applied. |
+| work | `worker-sonnet` | `claude-sonnet-5` | code from a clear spec, moderate analysis, reading a subsystem, drafting scripts and docs — **and all mechanical work**: grep / glob, log tails, extracting fields and numbers, format and existence checks, status polling. |
+| work | `gate-auditor` | `claude-sonnet-5` | evaluate ship gates for a SHA and write the evidence line. |
+| work | `tournament-intel` | `claude-sonnet-5` | pull the public record after a round, replay, draft the memory note. |
 
-Domain agents (`arm-runner`, `gate-auditor`, `tournament-intel`) are narrow by design:
-each refuses work outside the runbook table it implements.
+Tier 3 is **not a direction-setter**. It runs what the data already settles, and it owns every
+loop — through `Monitor`, `CronCreate` or `/loop`, never a sleep loop.
+
+The `worker-haiku` tier was removed on 2026-09-24. Mechanical work moves up to `worker-sonnet`,
+or down to plain `Bash` in the calling session when it is pure `grep` / `jq` / `tail` — that
+path costs no model tokens at all and is deterministic, which is usually the better answer.
 
 ## KEEP — do it yourself (the main loop)
-Implementing an agreed plan, multi-step execution and loops, routine diagnosis, deciding
-what to delegate, and **verifying every worker's output before trusting it**.
+
+Carrying out an agreed plan, multi-step execution, routine diagnosis, deciding what to
+delegate, and **verifying every worker's output before trusting it**.
 
 ## Effort
-Valid values: `low` · `medium` · `high` · `xhigh` · `max`; absent means `high`. An
-unrecognised value — including a session-mode name such as `ultracode` — is an unknown
-frontmatter field and is **silently ignored**, so the agent falls back to the default with
-no error. Every agent here is pinned to `max` except one.
 
-**`worker-haiku` has no `effort` line, deliberately.** Claude Haiku 4.5 does not support the
-effort parameter and errors when it is sent. Do not add it back.
+Valid values: `low` · `medium` · `high` · `xhigh` · `max`. Absent means `high` — **except
+Claude Opus 5.5, whose default is `medium`**, so the `effort: max` line on the tier-2 agents
+does real work. An unrecognised value — including a session-mode name such as `ultracode` — is
+an unknown frontmatter field and is **silently ignored**, so the agent falls back to its
+default with no error. Every agent here is pinned to `max`; there is no exception.
+
+Verify a mass effort change by reading the frontmatter back, not by trusting that the `sed`
+exited 0.
 
 ## Rules that outrank convenience
-- Cheapest model that can be correct — but never cheap for a decision that is expensive to
-  get wrong.
-- **Angka atau tidak terjadi**: never report "done" without the measurement that proves it.
+
+- **Route down, then verify up.** The failure mode is not overspending; it is a cheap-model
+  error caught late — wrong at tier 3, believed at tier 2, shipped at tier 1.
+- Never cheap for a decision that is expensive to get wrong.
+- **Angka atau tidak terjadi** — never report "done" without the measurement that proves it.
   State the command you ran and the number it produced.
 - Rank work by what it protects: first what makes you **fail outright**, then what converts
   the clock into useful work, then schedule completion, then metric honesty, and only then
   hyper-parameters.
 - `disallowedTools` on the leaf agents is load-bearing. It is what stops a worker from
   spawning its own fan-out. Do not remove it to "unblock" something.
+- A lever whose default leaves it never running is not a feature — it is dead code.
 
 ---
 Install: `cp agents/*.md ~/.claude/agents/` and `cat CLAUDE.md >> ~/.claude/CLAUDE.md`.

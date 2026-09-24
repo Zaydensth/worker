@@ -1,49 +1,75 @@
-# worker — multi-model agent fleet for Claude Code
+# worker — a three-tier Claude Code agent fleet
 
-A cost-efficient, tiered set of Claude Code sub-agents. Instead of running the most
-powerful (and most expensive) model for every step, each task goes to the cheapest
-model that can do it correctly, with the top tier reserved for real strategy and for
-adversarial verification before anything irreversible.
+Seven sub-agents for Claude Code, arranged so that **one model decides, one model executes
+what was decided, and one model does the volume**. The point isn't "always use the cheap
+model" — it's that deciding, executing and grinding are three different jobs, and running all
+three on one model makes at least one of them worse.
+
+## The hierarchy
+
+| Tier | Model | Owns | Must not |
+|---|---|---|---|
+| **1 — Decide** | Claude Fable 5.1 | the plan, the design call, the diagnosis when the cause isn't obvious, the go / no-go | run the work — it cannot edit files or spawn agents |
+| **2 — Execute** | Claude Opus 5.5 | reading tier 1's plan *in detail* and carrying it out; adversarial verification before anything irreversible | re-decide. A plan that doesn't cover the case goes back to tier 1 |
+| **3 — Work** | Claude Sonnet 5 | everything the data already settles: monitoring, ops, data pulls, drafts, reports, **and every loop** | set direction. It executes the errand; it does not choose the errand |
 
 ## The fleet
 
-| Role | Agent | Model | Effort | Used for |
+| Agent | Tier | Model | Effort | Used for |
 |---|---|---|---|---|
-| Leader | `strategist` | Fable 5 | `max` | plan / hard calls / go-no-go (plan-only) |
-| Executor | `executor` | Opus 5 | `max` | implementation, loops, VPS ops |
-| Verifier | `verifier` | Opus 5 | `max` | adversarially refute a claim before a merge / push / submit |
-| Worker | `worker-sonnet` | Sonnet 5 | `max` | code from spec, parallel reading, drafts |
-| Worker | `worker-haiku` | Haiku 4.5 | *(none — see below)* | grep, log-scrape, extract, poll (mechanical) |
-| Domain | `arm-runner` | Opus 5 | `max` | run one pre-registered A/B arm end to end on the GPU box |
-| Domain | `gate-auditor` | Sonnet 5 | `max` | evaluate ship gates G1-G4 for a SHA, with evidence |
-| Domain | `tournament-intel` | Sonnet 5 | `max` | pull the public record after a round, replay, draft a memory |
+| `strategist` | 1 | `claude-fable-5-1` | `max` | the plan, the hard call, the go / no-go (plan-only) |
+| `executor` | 2 | `claude-opus-5-5` | `max` | implementation, multi-file critical-path work, VPS orchestration |
+| `verifier` | 2 | `claude-opus-5-5` | `max` | adversarially refute a claim before a merge / push / submit |
+| `arm-runner` | 2 | `claude-opus-5-5` | `max` | run one pre-registered A/B arm end to end on a GPU box |
+| `worker-sonnet` | 3 | `claude-sonnet-5` | `max` | code from a spec, parallel reading, drafts, and all mechanical work |
+| `gate-auditor` | 3 | `claude-sonnet-5` | `max` | evaluate ship gates for a SHA, with evidence |
+| `tournament-intel` | 3 | `claude-sonnet-5` | `max` | pull the public record after a round, replay, draft a memory |
 
-Each role pins a `model` and an `effort`. Tool access is scoped: `strategist` and
-`verifier` are plan-only (no `Write`/`Edit`/`Agent`), workers cannot spawn sub-agents,
-and `worker-haiku` is read-and-report only. **Those `disallowedTools` lines are
-load-bearing — deleting one turns a leaf agent into one that can fan out.**
+## Tier 1 is a gate, not a habit
 
-### Valid `effort` values, and the one model that rejects it
+The failure this layout is built against is a main loop that quietly starts deciding for
+itself — picking the next experiment because it is nearby, not because it is the right one.
+So **tier 1 is consulted before work starts, not when tier 2 feels stuck.** Four points, and
+none of them is optional:
 
-`low` · `medium` · `high` · `xhigh` · `max`. Default is `high` when the field is absent.
+1. **LOCK** — before a plan or a pre-registration is frozen.
+2. **RE-SCOPE** — when the data contradicts the plan. Not "adjust and carry on".
+3. **GO / NO-GO** — before anything irreversible: a merge, a push, a submission.
+4. **POST-MORTEM** — the synthesis after the result lands.
+
+The unit is a **plan, not a step**. One locked plan covers dozens of cells; cells inside it
+need no further tier-1 call. That is what keeps a mandatory gate from becoming a tax.
+
+**Anchor the gate to an artifact, not to intent.** A gate that lives only in a prompt is a
+gate that a tired session skips. Have tier 1 emit a line the work can be checked against —
+a `FABLE-PLAN:` line in the lock file and an append-only `FABLE_LEDGER.md` entry — and have
+the downstream step *open the file and grep for it*:
+
+```sh
+grep -q '^FABLE-PLAN: ' "$LOCKFILE" || { echo 'REFUSE: no plan on record'; exit 1; }
+```
+
+No line, no GPU. Break glass by recording `VERDICT=UNAVAILABLE` or `VERDICT=BYPASS-USER`
+explicitly — so a missing tier 1 never idles a machine you're paying for, and never
+disappears silently either.
+
+## Effort
+
+`low` · `medium` · `high` · `xhigh` · `max`. Absent means `high` — **except Claude Opus 5.5,
+whose default is `medium`**, which is why the `effort: max` line on the tier-2 agents is
+load-bearing rather than decorative.
+
 Anything else — including a session-mode name such as `ultracode` — is an **unknown
-frontmatter field and is silently ignored**, which means the agent quietly falls back to
-the default with no error. If you want maximum, the word is `max`.
+frontmatter field and is silently ignored**: the agent falls back to its default with no
+error, no warning, and a config that *looks* applied. If you mean maximum, the word is `max`.
+Every agent here is pinned to `max`; there is no exception row.
 
-**`worker-haiku` carries no `effort` line on purpose.** Claude Haiku 4.5 does not support
-the effort parameter — sending it errors at the API level. Adding `effort:` back to that
-file breaks the agent.
+## Tool scoping is load-bearing
 
-## Operating patterns
-
-- **Pattern C (current default)** — main loop = **Sonnet 5** (`/model sonnet`). It carries
-  routine OODA, runbooks and monitoring, and reaches up only through `Agent`: `verifier`
-  (Opus) to refute a claim, `executor` (Opus) for critical-path multi-file work,
-  `strategist` (Fable) at most once per task for a genuinely hard call.
-- **Pattern B** — main loop = Opus; it executes and escalates to `strategist` about once
-  per task. Use when the work is sustained implementation.
-- **Pattern A** — main loop = Fable; it plans and delegates execution down. Use for
-  planning-heavy work.
+`strategist`, `verifier` and `tournament-intel` cannot `Write`, `Edit` or spawn an `Agent`.
+`gate-auditor` cannot `Edit` or spawn. `worker-sonnet` and `arm-runner` cannot spawn.
+Sub-agents really can delegate, so those `disallowedTools` lines are what keep a leaf a leaf
+— **deleting one to "unblock" something turns a worker into an unbounded fan-out.**
 
 ## Install
 
@@ -54,20 +80,20 @@ cat CLAUDE.md >> ~/.claude/CLAUDE.md      # or merge by hand
 
 A project-scoped `.claude/agents/` overrides `~/.claude/agents/` for a per-repo variant.
 
-## Why it saves
+## Why it works
 
-The plan — where the top model's intelligence actually matters — is a small fraction of
-the tokens; execution and mechanical work are the bulk. Sub-agents also run in isolated
-context, so a worker doesn't pay to re-read the whole session, and the main-loop model is
-the one that re-reads context each turn — the single biggest cost lever, which is why
-Pattern C puts Sonnet there.
+The plan is a small fraction of the tokens; execution and volume are the bulk. Sub-agents run
+in isolated context, so a worker doesn't pay to re-read the whole session — and the main-loop
+model, which *does* re-read context every turn, is the single biggest cost lever. Putting
+Sonnet there and reaching up through `Agent` is what makes a mandatory tier-1 gate affordable:
+four Fable calls in a cycle cost less than an afternoon of Fable running the main loop.
 
-Note the tradeoff this repo currently makes: every effort is pinned to `max`, so the
-savings come from **model choice and context isolation**, not from effort tuning. If a
-route is high-volume and latency-sensitive, lower its agent's effort rather than its model.
+Every effort is pinned to `max`, so the savings come from **model choice and context
+isolation**, not from effort tuning. If a route is high-volume and latency-sensitive, lower
+that agent's effort rather than its model.
 
-## How routing works
+## Route down, then verify up
 
-Claude reads each agent's `description` to auto-delegate; `CLAUDE.md` carries the explicit
-hand-off rules. Keep the top tier out of routine work, and always verify a worker's output
-before trusting it — a cheap wrong answer trusted late costs more than the model it saved.
+The failure mode is not overspending. It is a cheap-model error caught late: a wrong number
+extracted at tier 3, believed at tier 2, shipped at tier 1. Every cheap output a decision
+rests on gets re-derived by the tier above it before anyone acts on it.
