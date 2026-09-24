@@ -9,7 +9,7 @@ description: >
   stops and goes back to the strategist. Do NOT use it for the strategy call itself,
   or for a well-specified single script, a subsystem read, or mechanical
   find-and-report and polling (worker-sonnet).
-model: claude-opus-5
+model: claude-opus-5-5
 effort: max
 ---
 
