@@ -2,58 +2,72 @@
 
 A cost-efficient, tiered set of Claude Code sub-agents. Instead of running the most
 powerful (and most expensive) model for every step, each task goes to the cheapest
-model that can do it correctly, with the top tier reserved for real strategy.
+model that can do it correctly, with the top tier reserved for real strategy and for
+adversarial verification before anything irreversible.
 
-## The tiers
+## The fleet
 
-| Tier | Role | Model | Price /1M (in/out) | Used for |
+| Role | Agent | Model | Effort | Used for |
 |---|---|---|---|---|
-| Leader | `strategist` | Fable 5 | $10 / $50 | plan / critical thinking / go-no-go (plan-only) |
-| Co-Leader | `executor` | Opus 4.8 | $5 / $25 | implementation, loops, VPS ops, verification |
-| Worker | `worker-sonnet` | Sonnet 5 | $3 / $15 | code from spec, parallel reading, drafts |
-| Worker | `worker-haiku` | Haiku 4.5 | $1 / $5 | grep, log-scrape, extract, poll (mechanical) |
+| Leader | `strategist` | Fable 5 | `max` | plan / hard calls / go-no-go (plan-only) |
+| Executor | `executor` | Opus 5 | `max` | implementation, loops, VPS ops |
+| Verifier | `verifier` | Opus 5 | `max` | adversarially refute a claim before a merge / push / submit |
+| Worker | `worker-sonnet` | Sonnet 5 | `max` | code from spec, parallel reading, drafts |
+| Worker | `worker-haiku` | Haiku 4.5 | *(none — see below)* | grep, log-scrape, extract, poll (mechanical) |
+| Domain | `arm-runner` | Opus 5 | `max` | run one pre-registered A/B arm end to end on the GPU box |
+| Domain | `gate-auditor` | Sonnet 5 | `max` | evaluate ship gates G1-G4 for a SHA, with evidence |
+| Domain | `tournament-intel` | Sonnet 5 | `max` | pull the public record after a round, replay, draft a memory |
 
-Each role is pinned to a `model` and an `effort` in its frontmatter. Tool access is
-scoped: `strategist` is plan-only (no `Write`/`Edit`/`Agent`), workers cannot spawn
-sub-agents, and `worker-haiku` is read-and-report only.
+Each role pins a `model` and an `effort`. Tool access is scoped: `strategist` and
+`verifier` are plan-only (no `Write`/`Edit`/`Agent`), workers cannot spawn sub-agents,
+and `worker-haiku` is read-and-report only. **Those `disallowedTools` lines are
+load-bearing — deleting one turns a leaf agent into one that can fan out.**
 
-## Two operating patterns
+### Valid `effort` values, and the one model that rejects it
 
-- **Pattern B (default)** — main loop = Opus (`/model opus`); it executes and
-  escalates to `strategist` (Fable) about once per task for hard calls. Best when
-  the work is mostly sustained execution with occasional hard strategy.
-- **Pattern A** — main loop = Fable (`/model fable`); it plans and delegates
-  execution down to the Opus / Sonnet / Haiku workers. Best for planning-heavy work.
+`low` · `medium` · `high` · `xhigh` · `max`. Default is `high` when the field is absent.
+Anything else — including a session-mode name such as `ultracode` — is an **unknown
+frontmatter field and is silently ignored**, which means the agent quietly falls back to
+the default with no error. If you want maximum, the word is `max`.
+
+**`worker-haiku` carries no `effort` line on purpose.** Claude Haiku 4.5 does not support
+the effort parameter — sending it errors at the API level. Adding `effort:` back to that
+file breaks the agent.
+
+## Operating patterns
+
+- **Pattern C (current default)** — main loop = **Sonnet 5** (`/model sonnet`). It carries
+  routine OODA, runbooks and monitoring, and reaches up only through `Agent`: `verifier`
+  (Opus) to refute a claim, `executor` (Opus) for critical-path multi-file work,
+  `strategist` (Fable) at most once per task for a genuinely hard call.
+- **Pattern B** — main loop = Opus; it executes and escalates to `strategist` about once
+  per task. Use when the work is sustained implementation.
+- **Pattern A** — main loop = Fable; it plans and delegates execution down. Use for
+  planning-heavy work.
 
 ## Install
 
-Copy the agent files into your Claude Code agents directory:
-
 ```sh
 cp agents/*.md ~/.claude/agents/
-```
-
-Add the hand-off rules to your global instructions:
-
-```sh
 cat CLAUDE.md >> ~/.claude/CLAUDE.md      # or merge by hand
 ```
 
-A project-scoped `.claude/agents/` overrides `~/.claude/agents/` if you want a
-per-repo variant of a role.
+A project-scoped `.claude/agents/` overrides `~/.claude/agents/` for a per-repo variant.
 
 ## Why it saves
 
-The plan — where the top model's intelligence actually matters — is a small
-fraction of the tokens; execution and mechanical work are the bulk. Running the
-bulk on Opus / Sonnet / Haiku instead of Fable is where the savings are: a
-mechanical log-scrape on Haiku is ~10× cheaper than on Fable. Sub-agents also run
-in isolated context, so a worker doesn't pay to re-read the whole session, and the
-main-loop model (Opus, not Fable) is the one that re-reads context each turn — the
-single biggest cost lever.
+The plan — where the top model's intelligence actually matters — is a small fraction of
+the tokens; execution and mechanical work are the bulk. Sub-agents also run in isolated
+context, so a worker doesn't pay to re-read the whole session, and the main-loop model is
+the one that re-reads context each turn — the single biggest cost lever, which is why
+Pattern C puts Sonnet there.
+
+Note the tradeoff this repo currently makes: every effort is pinned to `max`, so the
+savings come from **model choice and context isolation**, not from effort tuning. If a
+route is high-volume and latency-sensitive, lower its agent's effort rather than its model.
 
 ## How routing works
 
-Claude reads each agent's `description` to auto-delegate, and `CLAUDE.md` gives the
-explicit hand-off rules. Keep the top tier out of routine work; always verify a
-worker's output before trusting it.
+Claude reads each agent's `description` to auto-delegate; `CLAUDE.md` carries the explicit
+hand-off rules. Keep the top tier out of routine work, and always verify a worker's output
+before trusting it — a cheap wrong answer trusted late costs more than the model it saved.

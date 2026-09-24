@@ -5,8 +5,9 @@ description: >
   extracting numbers or fields from JSON, format/existence checks, file/SHA
   lookups, status and cron polling. Use proactively for high-volume "find and
   report" tasks where a larger model would be pure waste.
+  Do NOT use it for anything needing judgement, interpretation or an edit — a wrong
+  cheap answer trusted late costs more than the model it saved.
 model: haiku
-effort: low
 disallowedTools: Write, Edit, Agent
 ---
 

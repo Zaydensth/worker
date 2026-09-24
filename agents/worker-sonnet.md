@@ -5,8 +5,10 @@ description: >
   code from a clear spec, moderate analysis, reading a subsystem in parallel
   (validator code, repo map), drafting generation scripts, running CPU
   verification, drafting summaries and docs.
+  Do NOT use it for adversarial verification of a decision, for a fix whose cause is
+  unknown, or for high-volume grep/poll work that worker-haiku does for a third of it.
 model: sonnet
-effort: medium
+effort: max
 disallowedTools: Agent
 ---
 
