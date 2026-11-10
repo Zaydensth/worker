@@ -25,9 +25,10 @@ three on one model makes at least one of them worse.
 | `gate-auditor` | 3 | `claude-sonnet-5` | `max` | evaluate ship gates for a SHA, with evidence |
 | `tournament-intel` | 3 | `claude-sonnet-5` | `max` | pull the public record after a round, replay, draft a memory |
 
-`claude-fable-5-2` needs Claude Code >= 2.1.290 (the catalog's `min_claude_code_version`). On an
-older build an unknown model id does not error — it is served as something else — so check the
-transcript (below) after any model change.
+`claude-fable-5-2` is known to Claude Code from 2.1.321 on (CHANGELOG). On an older build the id
+does not error: on 2.1.317 both a frontmatter `claude-fable-5-2` and the `fable` alias were served
+`claude-fable-5-1`, the family's known model. Check the transcript (below) after any model change
+and after any CLI update.
 
 ## Tier 1 is a gate, not a habit
 
@@ -98,6 +99,11 @@ their effort setting at all. What this turned up on one build (2.1.280), in 12 d
   if 5.5 starts being served directly to sub-agents, they pick it up with no edit.
 - A **typo'd model ID did not error**. It was silently served as Sonnet. Grep your
   frontmatter against the exact IDs you mean before trusting a fleet.
+- A **newer model id on an older build does not error either** (2.1.317, 2026-11-10): the
+  request went out as `claude-fable-5-1` — the family's model that build knew — with no fallback
+  message, for the full id and for the `fable` alias alike. Support for `claude-fable-5-2`
+  arrived in 2.1.321, so a pinned frontmatter picks it up on the next CLI update; re-run this
+  grep after the update instead of assuming.
 
 ## Effort
 
