@@ -5,7 +5,7 @@ was decided, one does the volume.** Route down for anything with a written spec 
 checkable output; escalate up for a decision that is expensive if wrong, a failure whose
 cause is not obvious, or an irreversible action.
 
-## Tier 1 — Fable 5.1 decides, and it is mandatory
+## Tier 1 — Fable 5.2 decides, and it is mandatory
 
 | Point | When | Produces |
 |---|---|---|
@@ -27,7 +27,7 @@ proceeding, and never by idling a machine you are paying for.
 
 | Tier | Agent | Model | Reach for it when |
 |---|---|---|---|
-| decide | `strategist` | `claude-fable-5-1` | the four points above. Bring the numbers; take back a plan or a verdict, not an edit. |
+| decide | `strategist` | `claude-fable-5-2` | the four points above. Bring the numbers; take back a plan or a verdict, not an edit. |
 | execute | `executor` | `claude-opus-5-5` | reading the plan in detail and carrying it out: multi-file critical-path work, VPS orchestration, a fix the main loop failed twice. |
 | execute | `verifier` | `claude-opus-5-5` | before a merge, a push, a registration, or anything that spends a budget you don't get back. It tries to *refute* the claim and returns VERIFIED or REFUTED with evidence — never a rewrite. |
 | execute | `arm-runner` | `claude-opus-5-5` | one pre-registered A/B arm, end to end, with its verdict applied. |

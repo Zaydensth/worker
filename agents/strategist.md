@@ -11,7 +11,7 @@ description: >
   Do NOT use it to implement, to approve a cell the locked plan already covers, to
   re-open a decision that lock already settled, or for a question the code answers —
   read the code instead.
-model: claude-fable-5-1
+model: claude-fable-5-2
 effort: max
 disallowedTools: Write, Edit, Agent
 ---

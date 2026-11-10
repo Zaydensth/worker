@@ -9,7 +9,7 @@ three on one model makes at least one of them worse.
 
 | Tier | Model | Owns | Must not |
 |---|---|---|---|
-| **1 — Decide** | Claude Fable 5.1 | the plan, the design call, the diagnosis when the cause isn't obvious, the go / no-go | run the work — it cannot edit files or spawn agents |
+| **1 — Decide** | Claude Fable 5.2 | the plan, the design call, the diagnosis when the cause isn't obvious, the go / no-go | run the work — it cannot edit files or spawn agents |
 | **2 — Execute** | Claude Opus 5.5 (backup: Opus 5) | reading tier 1's plan *in detail* and carrying it out; adversarial verification before anything irreversible | re-decide. A plan that doesn't cover the case goes back to tier 1 |
 | **3 — Work** | Claude Sonnet 5 | everything the data already settles: monitoring, ops, data pulls, drafts, reports, **and every loop** | set direction. It executes the errand; it does not choose the errand |
 
@@ -17,13 +17,17 @@ three on one model makes at least one of them worse.
 
 | Agent | Tier | Model | Effort | Used for |
 |---|---|---|---|---|
-| `strategist` | 1 | `claude-fable-5-1` | `max` | the plan, the hard call, the go / no-go (plan-only) |
+| `strategist` | 1 | `claude-fable-5-2` | `max` | the plan, the hard call, the go / no-go (plan-only) |
 | `executor` | 2 | `claude-opus-5-5` | `max` | implementation, multi-file critical-path work, VPS orchestration |
 | `verifier` | 2 | `claude-opus-5-5` | `max` | adversarially refute a claim before a merge / push / submit |
 | `arm-runner` | 2 | `claude-opus-5-5` | `max` | run one pre-registered A/B arm end to end on a GPU box |
 | `worker-sonnet` | 3 | `claude-sonnet-5` | `max` | code from a spec, parallel reading, drafts, and all mechanical work |
 | `gate-auditor` | 3 | `claude-sonnet-5` | `max` | evaluate ship gates for a SHA, with evidence |
 | `tournament-intel` | 3 | `claude-sonnet-5` | `max` | pull the public record after a round, replay, draft a memory |
+
+`claude-fable-5-2` needs Claude Code >= 2.1.290 (the catalog's `min_claude_code_version`). On an
+older build an unknown model id does not error — it is served as something else — so check the
+transcript (below) after any model change.
 
 ## Tier 1 is a gate, not a habit
 
@@ -98,7 +102,7 @@ their effort setting at all. What this turned up on one build (2.1.280), in 12 d
 ## Effort
 
 `low` · `medium` · `high` · `xhigh` · `max`. Absent means the model's default — `medium` for
-Opus 5.5, `high` for the others — so the explicit `effort: max` on every agent does real work,
+Opus 5.5 and Fable 5.2, `high` for the older ones — so the explicit `effort: max` on every agent does real work,
 and the transcript confirms it reaches the request.
 
 Anything else — including a session-mode name such as `ultracode` — is an **unknown
